@@ -30,6 +30,8 @@ vDraw * createDrawer(std::string tag)
 
     if(tag == addressDraw::drawtype)
         return new addressDraw();
+    if(tag == rasterDraw::drawtype)
+        return new rasterDraw();
     if(tag == grayDraw::drawtype)
         return new grayDraw();
     if(tag == isoDraw::drawtype)
@@ -56,12 +58,6 @@ vDraw * createDrawer(std::string tag)
         return new isoCircDraw();
     if(tag == overlayStereoDraw::drawtype)
         return new overlayStereoDraw();
-    if(tag == saeDraw::drawtype)
-        return new saeDraw();
-    if(tag == imuDraw::drawtype)
-        return new imuDraw();
-    if(tag == cochleaDraw::drawtype)
-        return new cochleaDraw();
     return 0;
 
 }

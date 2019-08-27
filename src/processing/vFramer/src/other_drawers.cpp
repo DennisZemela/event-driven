@@ -269,44 +269,133 @@ void overlayStereoDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
     }
 }
 
-// SAE DRAW //
-// =========== //
+//Rasterplot Draw//
+//=============//
 
-const std::string saeDraw::drawtype = "SAE";
+const std::string rasterDraw::drawtype = "RASTER";
 
-std::string saeDraw::getDrawType()
+std::string rasterDraw::getDrawType()
 {
-    return saeDraw::drawtype;
+    return rasterDraw::drawtype;
 }
 
-std::string saeDraw::getEventType()
+std::string rasterDraw::getEventType()
 {
     return AddressEvent::tag;
 }
 
-void saeDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
+void rasterDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
 {
-    if(eSet.empty()) return;
-    if(vTime < 0) vTime = eSet.back()->stamp;
+    //setOfQueues (=eSet) is a merge of many queues received by the vFramer:i-port
+    //The port accumulates events, so the eSet gets longer over time!
+    //check if eSet contains elements
+    if(eSet.empty()){
+        return;
+    }
+    //get latest timestamp of eSet
+    if(vTime < 0){
+        vTime = eSet.back()->stamp;
+    }
+    //Event-to-Pixel Iterator:
+    for(int y=(neuronID-1); y>=0; y--){
+        for(int x=(timeElements-1); x>=0; x--){
+
+            //if there is an Eventpixel in the storage
+            if (eventStorage.at(y).at(x) > 0){
+
+                //scale timeElements to Xlimit of vFramer [optional]
+                if(scaling){
+
+                    //reset if last timeElement is reached
+                    if(x >= int(timeElements-1)){
+                        eventStorage.at(y).at(x) = 0;
+                        yInfo()<<"y: " << y <<"x: "<< x;
+                    }
+
+                    xPixel = round(x*xScaler);
+
+                    //With big neuronID's use (y = yPixel) directly:
+                    if(neuronID >= Ylimit){
+                        image.at<cv::Vec3b>(y, xPixel) = cv::Vec3b(255, 0, 0);
+                        yInfo()<<"yPixel: " << y <<"xPixel: "<< xPixel;
+                    }
+
+                    //With small neuronID's use yPixel inside the eventStorage
+                    else{
+                        image.at<cv::Vec3b>(eventStorage.at(y).at(x), xPixel) = cv::Vec3b(255, 0, 0);
+                        yInfo()<< "yEvent: " << y << "yPixel: " << eventStorage.at(y).at(x) <<"xPixel: "<< xPixel;
+                    }
+                }
+                //check when no scaling:
+                else if ((Xlimit-1) > x){
+                    image.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 0, 0);
+                    //reset eventStorage if Xlimit is reached by x
+                    if(x == (Xlimit-1.0)){
+                        eventStorage.at(y).at(x) = 0;
+                    }
+                }
+                if(eventStorage.at(y).at(x) > 0){
+                    //"eventSpeed" = period
+                    eventStorage.at(y).at(x+1) = eventStorage.at(y).at(x);
+                    yInfo()<<"NewYEvent: " << y <<"NewYPixel: "<< eventStorage.at(y).at(x+1) << "NewXPixel: " << x;
+                    eventStorage.at(y).at(x) = 0;
+                    yInfo()<<"OldYEvent: "<< "y: " << y <<"OldYPixel: "<< eventStorage.at(y).at(x) << "OldXPixel: "<< x;
+                    }
+            }
+        }
+    }
+    //go through the eSet-q and start with the latest event
     ev::vQueue::const_reverse_iterator qi;
     for(qi = eSet.rbegin(); qi != eSet.rend(); qi++) {
 
+        //calculate the time difference between latest and actual event
         int dt = vTime - (*qi)->stamp;
-        if(dt < 0) dt += ev::vtsHelper::max_stamp;
-        if((unsigned int)dt > display_window) break;
 
-        double decay = (double)dt / (double)display_window;
+        // if the difference is negative,the timestamp of the new eSet-q was over max_stamp = 85ms and just resetted
+        if(dt < 0)
+            dt += ev::vtsHelper::max_stamp;
 
-        auto aep = is_event<AddressEvent>(*qi);
+        //eSet-q accumulates more and more events, therefore ignore events that are older than 1ms
+        if((unsigned int)dt > display_window){
+            break;
+        }
 
-        cv::Vec3b &cpc = image.at<cv::Vec3b>(aep->y, aep->x);
-        if(cpc != white)
+        //Safety: Make whatevers inside the q-element to AE
+        auto aep = as_event<AE>(*qi);
+
+        if(!aep){
             continue;
+        }
+        //Safe it as an accessible AE
+        AE v = *(aep);
 
-        if(aep->polarity)
-            cpc = aqua + (white - aqua) * decay;
-        else
-            cpc = violet + (white - violet) * decay;
+        //measure neuronID (total 32bit address as integer)
+        unsigned int y = v._coded_data;
+        yInfo()<<"NeuronID: " << y;
+        //flips the y-Axis [optional]
+//        if(flip) {
+//            y = (Ylimit-1) - y;
+//        }
 
+        //scale neuronID to YLimit of vFramer [optional]
+        if(scaling){
+            yPixel = round(y * yScaler);
+
+            //with big neuronID's safe yPixel in y
+            if(neuronID >= Ylimit){
+                eventStorage.at(yPixel).at(0) = 1;
+                yInfo()<<"yPixelevent: " << yPixel <<"xPixelevent: "<< 0;
+            }
+            //with small neuronID's safe yPixel inside eventStore
+            else if(neuronID >= y){
+                eventStorage.at(y).at(0) = yPixel;
+                yInfo()<<"yEvent: " << y <<"yPixelevent: "<< eventStorage.at(y).at(0) << "xPixelevent: " << 0;
+            }
+        }
+        //no scaling:
+        else if(neuronID>= y){
+            eventStorage.at(y).at(0) = 1;
+            yInfo()<< "yEvent: " << y <<"xPixelevent: "<<"No scaling: " << eventStorage.at(y).at(0);
+        }
     }
 }

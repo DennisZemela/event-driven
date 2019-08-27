@@ -25,6 +25,7 @@
 #include <iCub/eventdriven/all.h>
 #include <string>
 #include <opencv2/opencv.hpp>
+#include <vector>
 
 class vDraw;
 
@@ -51,12 +52,6 @@ protected:
     unsigned int display_window;
     unsigned int max_window;
     bool flip;
-
-    cv::Vec3b violet {151, 174, 6};
-    cv::Vec3b aqua  {180, 10, 155};
-    cv::Vec3b orange {9, 111, 255};
-    cv::Vec3b lime   {9, 250, 222};
-    cv::Vec3b white{255, 255, 255};
 
 public:
 
@@ -131,6 +126,44 @@ public:
 
 };
 
+class rasterDraw : public vDraw {
+
+protected:
+
+    double Xlimit; //width [in pixel] of vFramer
+    double Ylimit;  //height [in pixel] of vFramer
+    unsigned int neuronID; //max. 255 with SpiNNaker
+    unsigned int timeElements;
+    unsigned int display_window;
+    double yScaler;
+    double xScaler;
+    double totalTime; // [in s]
+    double period; // period of the module sending the events [in s]
+    int yPixel;
+    int xPixel;
+    bool flip;
+    bool scaling;
+    std::vector<std::vector<unsigned int>> eventStorage;
+
+public:
+
+    rasterDraw() : Xlimit(304), Ylimit(240), neuronID(250), totalTime(0.2), period(0.001), flip(false), scaling(true)
+    {
+        display_window = 0.1*ev::vtsHelper::vtsscaler; //100ms
+        timeElements = round(totalTime/period); //temporal resolution
+
+        eventStorage.resize(neuronID,vector<unsigned int>(timeElements,0)); //row: neuronID, columns: timeElements
+
+        xScaler = (Xlimit-1.0)/timeElements;
+        yScaler = (Ylimit-1.0)/neuronID;
+    }
+
+    static const std::string drawtype;
+    virtual void draw(cv::Mat &image, const ev::vQueue &eSet, int vTime);
+    virtual std::string getDrawType();
+    virtual std::string getEventType();
+};
+
 class addressDraw : public vDraw {
 
 public:
@@ -165,28 +198,6 @@ public:
 };
 
 class skinsampleDraw : public vDraw {
-
-public:
-
-    static const std::string drawtype;
-    virtual void draw(cv::Mat &image, const ev::vQueue &eSet, int vTime);
-    virtual std::string getDrawType();
-    virtual std::string getEventType();
-
-};
-
-class imuDraw : public vDraw {
-
-public:
-
-    static const std::string drawtype;
-    virtual void draw(cv::Mat &image, const ev::vQueue &eSet, int vTime);
-    virtual std::string getDrawType();
-    virtual std::string getEventType();
-
-};
-
-class cochleaDraw : public vDraw {
 
 public:
 
@@ -330,17 +341,6 @@ public:
 };
 
 class overlayStereoDraw : public vDraw {
-
-public:
-
-    static const std::string drawtype;
-    virtual void draw(cv::Mat &image, const ev::vQueue &eSet, int vTime);
-    virtual std::string getDrawType();
-    virtual std::string getEventType();
-
-};
-
-class saeDraw : public vDraw {
 
 public:
 
