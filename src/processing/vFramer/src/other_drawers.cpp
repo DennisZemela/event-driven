@@ -286,8 +286,6 @@ std::string rasterDraw::getEventType()
 
 void rasterDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
 {
-    //setOfQueues (=eSet) is a merge of many queues received by the vFramer:i-port
-    //The port accumulates events, so the eSet gets longer over time!
     //check if eSet contains elements
     if(eSet.empty()){
         return;
@@ -301,45 +299,38 @@ void rasterDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
         for(int x=(timeElements-1); x>=0; x--){
 
             //if there is an Eventpixel in the storage
-            if (eventStorage.at(y).at(x) > 0){
+            if (eventStorage[y][x] > 0){
 
-                //scale timeElements to Xlimit of vFramer [optional]
+                //SCALING timeElements to Xlimit of vFramer [optional]
                 if(scaling){
-
                     //reset if last timeElement is reached
                     if(x >= int(timeElements-1)){
-                        eventStorage.at(y).at(x) = 0;
-                        yInfo()<<"y: " << y <<"x: "<< x;
+                        eventStorage[y][x] = 0;
                     }
-
                     xPixel = round(x*xScaler);
 
-                    //With big neuronID's use (y = yPixel) directly:
+                    //when neuronID is bigger than screenheight, yPixel=y:
                     if(neuronID >= Ylimit){
                         image.at<cv::Vec3b>(y, xPixel) = cv::Vec3b(255, 0, 0);
-                        yInfo()<<"yPixel: " << y <<"xPixel: "<< xPixel;
                     }
-
-                    //With small neuronID's use yPixel inside the eventStorage
+                    //when neuronID is smaller than screenheight, yPixel is inside storage
                     else{
-                        image.at<cv::Vec3b>(eventStorage.at(y).at(x), xPixel) = cv::Vec3b(255, 0, 0);
-                        yInfo()<< "yEvent: " << y << "yPixel: " << eventStorage.at(y).at(x) <<"xPixel: "<< xPixel;
+                        image.at<cv::Vec3b>(eventStorage[y][x], xPixel) = cv::Vec3b(255, 0, 0);
                     }
                 }
-                //check when no scaling:
+                //NO SCALING so we stay in x-Limit of vFramer:
                 else if ((Xlimit-1) > x){
                     image.at<cv::Vec3b>(y, x) = cv::Vec3b(255, 0, 0);
-                    //reset eventStorage if Xlimit is reached by x
-                    if(x == (Xlimit-1.0)){
-                        eventStorage.at(y).at(x) = 0;
+                    //reset storage if xLimit of vFramer is reached
+                    if(x >= (Xlimit-1.0)){
+                        eventStorage[y][x] = 0;
                     }
                 }
-                if(eventStorage.at(y).at(x) > 0){
-                    //"eventSpeed" = period
-                    eventStorage.at(y).at(x+1) = eventStorage.at(y).at(x);
-                    yInfo()<<"NewYEvent: " << y <<"NewYPixel: "<< eventStorage.at(y).at(x+1) << "NewXPixel: " << x;
-                    eventStorage.at(y).at(x) = 0;
-                    yInfo()<<"OldYEvent: "<< "y: " << y <<"OldYPixel: "<< eventStorage.at(y).at(x) << "OldXPixel: "<< x;
+                if(eventStorage[y][x] > 0){
+                    //Increase timeElement by the period (dist between two elements)
+                    eventStorage[y][x+1] = eventStorage[y][x];
+                    //reset the old field value
+                    eventStorage[y][x] = 0;
                     }
             }
         }
@@ -348,14 +339,14 @@ void rasterDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
     ev::vQueue::const_reverse_iterator qi;
     for(qi = eSet.rbegin(); qi != eSet.rend(); qi++) {
 
-        //calculate the time difference between latest and actual event
+        //calculate the time difference between latest and actual event in eSet
         int dt = vTime - (*qi)->stamp;
 
-        // if the difference is negative,the timestamp of the new eSet-q was over max_stamp = 85ms and just resetted
+        // if diff is negative,timestamp was over max_stamp (=85ms) and resetted to 0ms
         if(dt < 0)
             dt += ev::vtsHelper::max_stamp;
 
-        //eSet-q accumulates more and more events, therefore ignore events that are older than 1ms
+        //eSet-q accumulates events, therefore ignore events that are older than 1ms
         if((unsigned int)dt > display_window){
             break;
         }
@@ -366,36 +357,34 @@ void rasterDraw::draw(cv::Mat &image, const ev::vQueue &eSet, int vTime)
         if(!aep){
             continue;
         }
-        //Safe it as an accessible AE
+        //Safe it as an accessible AE type
         AE v = *(aep);
 
         //measure neuronID (total 32bit address as integer)
         unsigned int y = v._coded_data;
-        yInfo()<<"NeuronID: " << y;
-        //flips the y-Axis [optional]
-//        if(flip) {
-//            y = (Ylimit-1) - y;
-//        }
 
-        //scale neuronID to YLimit of vFramer [optional]
+        //flip the y-Axis [optional]
+        if(flip){
+            y = (neuronID-1) - y;
+        }
+
+        //SCALING eventStorage [neuronID][...] to YLimit of vFramer [optional]
         if(scaling){
+
             yPixel = round(y * yScaler);
 
-            //with big neuronID's safe yPixel in y
+            //when neuronID bigger than screenheight, store yPixel in yEvent
             if(neuronID >= Ylimit){
-                eventStorage.at(yPixel).at(0) = 1;
-                yInfo()<<"yPixelevent: " << yPixel <<"xPixelevent: "<< 0;
+                eventStorage[yPixel][0] = 1;
             }
-            //with small neuronID's safe yPixel inside eventStore
+            //when neuronID's smaller than screenheight, but bigger than measured neuronID, store yPixel in eventStore
             else if(neuronID >= y){
-                eventStorage.at(y).at(0) = yPixel;
-                yInfo()<<"yEvent: " << y <<"yPixelevent: "<< eventStorage.at(y).at(0) << "xPixelevent: " << 0;
+                eventStorage[y][0] = yPixel;
             }
         }
-        //no scaling:
-        else if(neuronID>= y){
-            eventStorage.at(y).at(0) = 1;
-            yInfo()<< "yEvent: " << y <<"xPixelevent: "<<"No scaling: " << eventStorage.at(y).at(0);
+        //NO SCALING so we stay in y-Limit of vFramer
+        else if((neuronID-1)>= y){
+            eventStorage[y][0] = 1;
         }
     }
 }

@@ -129,6 +129,9 @@ public:
 class rasterDraw : public vDraw {
 
 protected:
+#define ARXLIM 50000     //max.timeElements
+#define ARYLIM 700       //max.neuronID
+    int eventStorage [ARYLIM][ARXLIM];
 
     double Xlimit; //width [in pixel] of vFramer
     double Ylimit;  //height [in pixel] of vFramer
@@ -143,16 +146,16 @@ protected:
     int xPixel;
     bool flip;
     bool scaling;
-    std::vector<std::vector<unsigned int>> eventStorage;
+    //std::vector<std::vector<unsigned int>> eventStorage;
 
 public:
 
-    rasterDraw() : Xlimit(304), Ylimit(240), neuronID(250), totalTime(0.2), period(0.001), flip(false), scaling(true)
+    rasterDraw() : Xlimit(304), Ylimit(240), neuronID(255), totalTime(7), period(0.01), flip(false), scaling(true)
     {
         display_window = 0.1*ev::vtsHelper::vtsscaler; //100ms
         timeElements = round(totalTime/period); //temporal resolution
 
-        eventStorage.resize(neuronID,vector<unsigned int>(timeElements,0)); //row: neuronID, columns: timeElements
+        //eventStorage.resize(neuronID,vector<unsigned int>(timeElements,0)); //row: neuronID, columns: timeElements
 
         xScaler = (Xlimit-1.0)/timeElements;
         yScaler = (Ylimit-1.0)/neuronID;
